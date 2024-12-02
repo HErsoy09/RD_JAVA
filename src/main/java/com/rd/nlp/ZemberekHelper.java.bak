@@ -1,0 +1,204 @@
+package com.rd.nlp;
+
+import com.rd.config.RiskConfig;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
+import zemberek.morphology.TurkishMorphology;
+import zemberek.tokenization.TurkishTokenizer;
+import zemberek.normalization.TurkishSpellChecker;
+import zemberek.normalization.TurkishSentenceNormalizer;
+import zemberek.morphology.analysis.SingleAnalysis;
+import zemberek.morphology.analysis.WordAnalysis;
+import java.io.File;
+import java.io.InputStream;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.*;
+
+@Slf4j
+public class ZemberekHelper {
+    private final TurkishMorphology morphology;
+    private final TurkishTokenizer tokenizer;
+    private final TurkishSpellChecker spellChecker;
+    private TurkishSentenceNormalizer normalizer;
+    private static final String LANGUAGE_MODEL_PATH = "nlp/lm-unigram.slm";
+    private static final String UNIGRAM_PATH = "nlp/turkishPatternTable";
+
+    public TurkishMorphology getMorphology() {
+        return morphology;
+    }
+
+    public TurkishTokenizer getTokenizer() {
+        return tokenizer;
+    }
+
+    public TurkishSpellChecker getSpellChecker() {
+        return spellChecker;
+    }
+
+    public TurkishSentenceNormalizer getSentenceNormalizer() {
+        return normalizer;
+    }
+
+    public ZemberekHelper() {
+        try {
+            this.morphology = TurkishMorphology.builder()
+                .setLexicon("src/main/resources/nlp/lexicon.txt")  // Lexicon dosyasını ekle
+                .build();
+            this.tokenizer = TurkishTokenizer.builder()
+                .ignoreTypes()
+                .build();
+            this.spellChecker = new TurkishSpellChecker(morphology);
+            
+            try {
+                // Kaynak dosyaların varlığını kontrol et
+                Resource lmResource = new ClassPathResource(LANGUAGE_MODEL_PATH);
+                Resource unigramResource = new ClassPathResource(UNIGRAM_PATH);
+                
+                if (!lmResource.exists() || !unigramResource.exists()) {
+                    log.error("Dil modeli dosyaları bulunamadı: {} ve {}", 
+                            LANGUAGE_MODEL_PATH, UNIGRAM_PATH);
+                    throw new RuntimeException("Dil modeli dosyaları eksik");
+                }
+                
+                // Geçici dizin oluştur
+                Path tempDir = Files.createTempDirectory("zemberek");
+                Path lmPath = tempDir.resolve("lm-unigram.slm");
+                Path unigramPath = tempDir.resolve("turkishPatternTable");
+                
+                // Dosyaları kopyala
+                try (InputStream lmStream = lmResource.getInputStream();
+                     InputStream unigramStream = unigramResource.getInputStream()) {
+                    Files.copy(lmStream, lmPath, StandardCopyOption.REPLACE_EXISTING);
+                    Files.copy(unigramStream, unigramPath, StandardCopyOption.REPLACE_EXISTING);
+                }
+                
+                // Normalizer'ı başlat
+                this.normalizer = new TurkishSentenceNormalizer(morphology, lmPath, unigramPath);
+                log.info("TurkishSentenceNormalizer başarıyla başlatıldı");
+                
+                // Geçici dosyaları temizle
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                    try {
+                        Files.deleteIfExists(lmPath);
+                        Files.deleteIfExists(unigramPath);
+                        Files.deleteIfExists(tempDir);
+                    } catch (Exception e) {
+                        log.warn("Geçici dosyalar temizlenemedi", e);
+                    }
+                }));
+                
+            } catch (Exception e) {
+                log.error("TurkishSentenceNormalizer başlatılamadı", e);
+                throw new RuntimeException("Normalizer başlatma hatası", e);
+            }
+        } catch (Exception e) {
+            log.error("Zemberek başlatma hatası", e);
+            throw new RuntimeException("Zemberek başlatılamadı", e);
+        }
+    }
+
+    public String[] tokenize(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            return new String[0];
+        }
+        return tokenizer.tokenize(text);
+    }
+
+    public String normalizeText(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            return "";
+        }
+
+        if (normalizer != null) {
+            try {
+                text = normalizer.normalize(text);
+            } catch (Exception e) {
+                log.error("Text normalization error", e);
+            }
+        }
+
+        try {
+            // Türkçe karakter normalizasyonu
+            String normalized = RiskConfig.normalizeCharacters(text.toLowerCase());
+            
+            // Kelimeleri işle
+            List<String> words = new ArrayList<>();
+            
+            String[] tokens = tokenize(normalized);
+            
+            for (String token : tokens) {
+                if (token.trim().isEmpty()) {
+                    continue;
+                }
+
+                // Risk veritabanında varsa direkt ekle
+                if (RiskConfig.RISK_DATABASE.containsKey(token)) {
+                    words.add(token);
+                    continue;
+                }
+
+                // İnformal kullanımları kontrol et
+                if (RiskConfig.INFORMAL_MAP.containsKey(token)) {
+                    String formalWord = RiskConfig.INFORMAL_MAP.get(token);
+                    words.add(formalWord);
+                    continue;
+                }
+
+                // Tire içeren kelimeleri koru
+                if (token.contains("-")) {
+                    words.add(token);
+                    continue;
+                }
+
+                // Kelimeyi olduğu gibi ekle
+                words.add(token);
+            }
+
+            return String.join(" ", words);
+        } catch (Exception e) {
+            log.error("Error normalizing text: " + text, e);
+            return text.toLowerCase().trim();
+        }
+    }
+
+    public Set<String> extractRootWords(String text) {
+        String[] tokens = tokenize(text);
+        Set<String> rootWords = new HashSet<>();
+
+        for (String token : tokens) {
+            // Önce yazım kontrolü yap
+            if (!spellChecker.check(token)) {
+                List<String> suggestions = spellChecker.suggestForWord(token);
+                if (!suggestions.isEmpty()) {
+                    token = suggestions.get(0); // En iyi öneriyi al
+                    log.debug("Yazım düzeltmesi yapıldı: {} -> {}", token, suggestions.get(0));
+                }
+            }
+
+            // Morfolojik analiz
+            try {
+                log.debug("Token analizi başlıyor: {}", token);
+                WordAnalysis analysis = morphology.analyze(token);
+                log.debug("Analiz sonucu: {} adet sonuç", analysis.analysisCount());
+                if (analysis.analysisCount() > 0) {
+                    SingleAnalysis bestAnalysis = analysis.getAnalysisResults().get(0);
+                    log.debug("En iyi analiz seçildi");
+                    String lemma = bestAnalysis.getDictionaryItem().root;
+                    log.debug("Root bulundu: {}", lemma);
+                    rootWords.add(lemma.toLowerCase());
+                } else {
+                    rootWords.add(token.toLowerCase());
+                }
+            } catch (Exception e) {
+                log.warn("Token analiz edilemedi: {}", token);
+                rootWords.add(token.toLowerCase());
+            }
+        }
+        return rootWords;
+    }
+}

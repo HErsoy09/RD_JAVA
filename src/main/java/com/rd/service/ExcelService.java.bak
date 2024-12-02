@@ -1,0 +1,434 @@
+package com.rd.service;
+
+import com.rd.model.RiskAssessment;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.time.LocalDate;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Slf4j
+public class ExcelService {
+    // 5x5 L Tipi Matris Excel sütun indeksleri
+    private static final int COL_NO = 0;
+    private static final int COL_BOLUM = 1;
+    private static final int COL_FAALIYET = 2;
+    private static final int COL_TEHLIKE = 3;
+    private static final int COL_RISK = 4;
+    private static final int COL_SONUC = 5;
+    private static final int COL_ETKI_ALANI = 6;
+    //private static final int COL_OLASILIK = 7;
+    //private static final int COL_SIDDET = 8;
+    //private static final int COL_RDS = 9;
+    //private static final int COL_ONCELIK_SIRASI = 10;
+    private static final int COL_MEVCUT_DURUM = 11;
+    private static final int COL_ALINACAK_ONLEM = 12;
+    private static final int COL_SORUMLU = 13;
+    private static final int COL_TERMIN = 14;
+    //private static final int COL_OLASILIK_OS = 15;
+    //private static final int COL_SIDDET_OS = 16;
+    //private static final int COL_RDS_OS = 17;
+    //private static final int COL_ONCELIK_SIRASI_OS = 18;
+    //private static final int COL_SONUC_OS = 19;
+
+/*    private static final int COL_NO = 0;
+    private static final int COL_TARIH = 1;
+    private static final int COL_SEBEP = 2;
+    private static final int COL_FAALIYET = 3;
+    private static final int COL_TEHLIKE = 4;
+    private static final int COL_RISK = 5;
+    private static final int COL_SONUC = 6;
+    private static final int COL_ETKILENENLER = 7;
+    private static final int COL_MEVCUT_ONLEM = 8;
+    private static final int COL_SIKLIK = 9;
+    private static final int COL_OLASILIK = 10;
+    private static final int COL_SIDDET = 11;
+    private static final int COL_DUSUK = 12;
+    private static final int COL_KABUL_EDILEBILIR = 13;
+    private static final int COL_ORTA = 14;
+    private static final int COL_BELIRGIN = 15;
+    private static final int COL_TOLERE_EDILEMEZ = 16;
+    private static final int COL_ALINACAK_ONLEM = 17;
+    private static final int COL_SORUMLU = 18;
+    private static final int COL_TERMIN = 19;
+    private static final int COL_SIKLIK_OS = 20;
+    private static final int COL_OLASILIK_OS = 21;
+    private static final int COL_SIDDET_OS = 22;
+    private static final int COL_DUSUK_OS = 23;
+    private static final int COL_KABUL_EDILEBILIR_OS = 24;
+    private static final int COL_ORTA_OS = 25;
+    private static final int COL_BELIRGIN_OS = 26;
+    private static final int COL_TOLERE_EDILEMEZ_OS = 27;
+    private static final int COL_SONUC_OS = 28;
+*/  
+
+    // Fine Kinney Matris Excel sütun indeksleri
+    private static final int COL_NEW_NO = 0;
+    private static final int COL_NEW_RISK_BELIRLEME_TARIHI = 1;
+    private static final int COL_NEW_RISK_DEG_SEBEBI = 2;
+    private static final int COL_NEW_FAALIYET_EKIPMAN_MALZEME_ADI = 3;
+    private static final int COL_NEW_TEHLIKE = 4;
+    private static final int COL_NEW_RISK = 5;
+    private static final int COL_NEW_SONUC = 6;
+    private static final int COL_NEW_ETKILENENLER = 7;
+    private static final int COL_NEW_MEVCUT_ONLEM = 8;
+    private static final int COL_NEW_SIKLIK = 9;
+    private static final int COL_NEW_OLASILIK = 10;
+    private static final int COL_NEW_SIDDET = 11;
+    private static final int COL_NEW_DUSUK = 12;
+    private static final int COL_NEW_KABUL_EDILEBILIR = 13;
+    private static final int COL_NEW_ORTA = 14;
+    private static final int COL_NEW_BELIRGIN = 15;
+    private static final int COL_NEW_TOLERE_EDILEMEZ = 16;
+    private static final int COL_NEW_ALINACAK_ONLEM = 17;
+    private static final int COL_NEW_SORUMLU = 18;
+    private static final int COL_NEW_TAMAMLANMA_TARIHI = 19;
+    private static final int COL_NEW_SIKLIK_OS = 20;
+    private static final int COL_NEW_OLASILIK_OS = 21;
+    private static final int COL_NEW_SIDDET_OS = 22;
+    private static final int COL_NEW_DUSUK_OS = 23;
+    private static final int COL_NEW_KABUL_EDILEBILIR_OS = 24;
+    private static final int COL_NEW_ORTA_OS = 25;
+    private static final int COL_NEW_BELIRGIN_OS = 26;
+    private static final int COL_NEW_TOLERE_EDILEMEZ_OS = 27;
+    private static final int COL_NEW_SONUC_OS = 28;
+
+
+    private static final String[] NEW_HEADERS = {
+        "Faaliyet No", "Risk Belirleme Tarihi", "Risk Değ. Sebebi", "Faaliyet, Ekipman, Malzeme Adı", 
+        "Tehlike", "Risk", "Sonuç", "Etkilenenler", "Mevcut Önlem", "Sıklık", "Olasılık", "Şiddet", 
+        "Düşük", "Kabul Edilebilir", "Orta", "Belirgin", "Tolere Edilemez", "Alınacak Önlem", 
+        "Sorumlu", "Tamamlanma Tarihi", "Sıklık (ÖS)", "Olasılık (ÖS)", "Şiddet (ÖS)", "Düşük (ÖS)", 
+        "Kabul Edilebilir (ÖS)", "Orta (ÖS)", "Belirgin (ÖS)", "Tolere Edilemez (ÖS)", "Sonuç (ÖS)"
+    };
+
+    private final RiskCalculationService riskCalculationService;
+    private final NlpAnalysisService nlpAnalysisService;
+    private final RiskMeasuresService riskMeasuresService;
+
+    public ExcelService(RiskCalculationService riskCalculationService, 
+                       NlpAnalysisService nlpAnalysisService,
+                       RiskMeasuresService riskMeasuresService) {
+        this.riskCalculationService = riskCalculationService;
+        this.nlpAnalysisService = nlpAnalysisService;
+        this.riskMeasuresService = riskMeasuresService;
+    }
+
+    public List<RiskAssessment> readExcel(String inputFile) throws IOException {
+        List<RiskAssessment> allAssessments = new ArrayList<>();
+        
+        try (FileInputStream fis = new FileInputStream(inputFile);
+             Workbook workbook = new XSSFWorkbook(fis)) {
+            
+            // Tüm sekmeleri işle
+            for (int sheetIndex = 0; sheetIndex < workbook.getNumberOfSheets(); sheetIndex++) {
+                Sheet sheet = workbook.getSheetAt(sheetIndex);
+                String sheetName = sheet.getSheetName();
+                log.info("Processing sheet: {}", sheetName);
+                
+                Row headerRow = sheet.getRow(0);
+                if (headerRow == null) {
+                    log.warn("Sheet {} has no header row, skipping", sheetName);
+                    continue;
+                }
+                
+                // Başlık satırını kontrol et
+                log.info("Excel headers for sheet {}:", sheetName);
+                for (Cell cell : headerRow) {
+                    String headerValue = getCellValueAsString(cell);
+                    log.info("Column {}: {}", cell.getColumnIndex(), headerValue);
+                }
+                
+                // Veri satırlarını işle
+                for (Row row : sheet) {
+                    if (row.getRowNum() == 0) continue; // Başlık satırını atla
+                    
+                    try {
+                        log.debug("Processing row {} in sheet {}", row.getRowNum(), sheetName);
+                        RiskAssessment assessment = parseRow(row);
+                        if (assessment != null) {
+                            assessment.setSheetName(sheetName);
+                            allAssessments.add(assessment);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Error processing row {} in sheet {}: {}", row.getRowNum(), sheetName, e.getMessage());
+                    }
+                }
+            }
+        }
+        
+        return allAssessments;
+    }
+
+    public void writeExcel(String outputFile, List<RiskAssessment> assessments) throws IOException {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            // Değerlendirmeleri sekmelere göre grupla
+            Map<String, List<RiskAssessment>> assessmentsBySheet = assessments.stream()
+                .collect(Collectors.groupingBy(RiskAssessment::getSheetName));
+            
+            // Her sekme için ayrı sayfa oluştur
+            for (Map.Entry<String, List<RiskAssessment>> entry : assessmentsBySheet.entrySet()) {
+                String sheetName = entry.getKey();
+                List<RiskAssessment> sheetAssessments = entry.getValue();
+                
+                // Risk skorlarına göre sırala
+                sheetAssessments.sort((a1, a2) -> 
+                    Double.compare(a2.getCurrentRiskScores().calculateNormalRiskScore(), 
+                                 a1.getCurrentRiskScores().calculateNormalRiskScore())
+                );
+                
+                Sheet sheet = workbook.createSheet(sheetName);
+                
+                // Başlık satırını oluştur
+                Row headerRow = sheet.createRow(0);
+                CellStyle headerStyle = createHeaderStyle(workbook);
+                
+                for (int i = 0; i < NEW_HEADERS.length; i++) {
+                    Cell cell = headerRow.createCell(i);
+                    cell.setCellValue(NEW_HEADERS[i]);
+                    cell.setCellStyle(headerStyle);
+                }
+                
+                // Değerlendirmeleri yaz
+                for (int i = 0; i < sheetAssessments.size(); i++) {
+                    RiskAssessment assessment = sheetAssessments.get(i);
+                    Row row = sheet.createRow(i + 1);
+                    
+                    // Faaliyet No'yu sekme adı ile birlikte oluştur
+                    String rowNum = String.format("%s-%03d", getSheetCode(sheetName), i + 1);
+                    setCellValue(row, COL_NEW_NO, rowNum);
+                    
+                    // Eski faaliyet no'yu temizle
+                    assessment.setNo(rowNum);
+                    
+                    // Satırı doldur
+                    fillAssessmentRow(row, assessment);
+                    
+                    // Risk değerlendirmesini logla
+                    log.info("Risk değerlendirmesi - No: {}, Risk Skoru: {}, Tolere Edilemez: {}", 
+                            rowNum, 
+                            assessment.getCurrentRiskScores().calculateNormalRiskScore(),
+                            assessment.getCurrentUnacceptableRisk());
+                }
+                
+                // Sütun genişliklerini ayarla
+                for (int i = 0; i < NEW_HEADERS.length; i++) {
+                    sheet.autoSizeColumn(i);
+                }
+            }
+            
+            // Dosyaya kaydet
+            try (FileOutputStream fileOut = new FileOutputStream(outputFile)) {
+                workbook.write(fileOut);
+            }
+        }
+    }
+
+    public void processWorkbook(String inputPath, String outputPath) throws IOException {
+        try (FileInputStream fis = new FileInputStream(inputPath);
+             Workbook workbook = new XSSFWorkbook(fis)) {
+
+            // Her sekmeyi işle
+            for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+                Sheet sheet = workbook.getSheetAt(i);
+                if (sheet.getLastRowNum() > 0) { // Boş sekmeleri atla
+                    log.info("Sheet processed: " + sheet.getSheetName());
+                }
+            }
+
+            // Değişiklikleri kaydet
+            try (FileOutputStream fos = new FileOutputStream(outputPath)) {
+                workbook.write(fos);
+                log.info("Workbook saved to: " + outputPath);
+            }
+        }
+    }
+
+    private RiskAssessment parseRow(Row row) {
+        try {
+            RiskAssessment assessment = new RiskAssessment();
+            
+            // Temel alanları doldur
+            assessment.setNo(getCellValueAsString(row.getCell(COL_NO)));
+            assessment.setBolum(getCellValueAsString(row.getCell(COL_BOLUM)));
+            assessment.setFaaliyet(getCellValueAsString(row.getCell(COL_FAALIYET)));
+            
+            // Tehlike analizi yap
+            String tehlikeText = getCellValueAsString(row.getCell(COL_TEHLIKE));
+            if (tehlikeText.isEmpty()) {
+                log.warn("Tehlike metni boş, satır atlanıyor: {}", row.getRowNum());
+                return null;
+            }
+            
+            assessment.setTehlike(tehlikeText);
+            
+            // NLP analizi ile risk skorlarını hesapla
+            RiskScores scores = nlpAnalysisService.analyzeRisk(tehlikeText);
+                       
+            // Risk skorlarını set et
+            assessment.setCurrentRiskScores(scores);
+            riskCalculationService.calculateAndSetRiskScores(assessment);
+            
+            // Diğer alanları doldur
+            assessment.setRisk(getCellValueAsString(row.getCell(COL_RISK)));
+            assessment.setSonuc(getCellValueAsString(row.getCell(COL_SONUC)));
+            assessment.setEtkilenenler(getCellValueAsString(row.getCell(COL_ETKI_ALANI)));
+            assessment.setMevcutOnlem(getCellValueAsString(row.getCell(COL_MEVCUT_DURUM)));
+            assessment.setAlinacakOnlem(getCellValueAsString(row.getCell(COL_ALINACAK_ONLEM)));
+            assessment.setSorumlu(getCellValueAsString(row.getCell(COL_SORUMLU)));
+            assessment.setTamamlanmaTarihi(getCellValueAsString(row.getCell(COL_TERMIN)));
+            
+            // Önlem sonrası değerleri hesapla
+            riskMeasuresService.calculateAndSetAfterMeasuresRiskScores(assessment, scores);
+
+            // Önlem sonrası risk değerlendirmesi için mesaj oluştur
+            RiskScores afterScores = assessment.getAfterMeasuresRiskScores();
+            if (afterScores != null) {
+                double afterRiskScore = afterScores.calculateNormalRiskScore();
+                String afterMessage = assessment.getSonucMesaji(afterRiskScore);
+                assessment.setSonucOS(afterMessage);
+            }
+            
+            return assessment;
+            
+        } catch (Exception e) {
+            log.error("Satır işlenirken hata: {} - {}", row.getRowNum(), e.getMessage());
+            return null;
+        }
+    }
+
+    private void fillAssessmentRow(Row row, RiskAssessment assessment) {
+        // Temel bilgileri doldur
+        setCellValue(row, COL_NEW_NO, assessment.getNo());
+        setCellValue(row, COL_NEW_RISK_BELIRLEME_TARIHI, LocalDate.now().toString());
+        setCellValue(row, COL_NEW_RISK_DEG_SEBEBI, "Periyodik Değerlendirme");
+        setCellValue(row, COL_NEW_FAALIYET_EKIPMAN_MALZEME_ADI, assessment.getBolum() + " - " + assessment.getFaaliyet());
+        setCellValue(row, COL_NEW_TEHLIKE, assessment.getTehlike());
+        setCellValue(row, COL_NEW_RISK, assessment.getRisk());
+        setCellValue(row, COL_NEW_SONUC, assessment.getSonuc());
+        setCellValue(row, COL_NEW_ETKILENENLER, assessment.getEtkilenenler());
+        setCellValue(row, COL_NEW_MEVCUT_ONLEM, assessment.getMevcutOnlem());
+        
+        // Mevcut risk değerlerini doldur
+        double[] currentRiskValues = assessment.getCurrentRiskValues();
+        setCellValue(row, COL_NEW_SIKLIK, currentRiskValues[0]);
+        setCellValue(row, COL_NEW_OLASILIK, currentRiskValues[1]);
+        setCellValue(row, COL_NEW_SIDDET, currentRiskValues[2]);
+        
+        // Risk kategorilerini doldur
+        double riskScore = assessment.getCurrentRiskScores().calculateNormalRiskScore();
+        setCellValue(row, COL_NEW_DUSUK, parseRiskValue(assessment.getCurrentLowRisk()) > 0 ? riskScore : 0);
+        setCellValue(row, COL_NEW_KABUL_EDILEBILIR, parseRiskValue(assessment.getCurrentAcceptableRisk()) > 0 ? riskScore : 0);
+        setCellValue(row, COL_NEW_ORTA, parseRiskValue(assessment.getCurrentMediumRisk()) > 0 ? riskScore : 0);
+        setCellValue(row, COL_NEW_BELIRGIN, parseRiskValue(assessment.getCurrentSignificantRisk()) > 0 ? riskScore : 0);
+        setCellValue(row, COL_NEW_TOLERE_EDILEMEZ, parseRiskValue(assessment.getCurrentUnacceptableRisk()) > 0 ? riskScore : 0);
+        
+        // Diğer bilgileri doldur
+        setCellValue(row, COL_NEW_ALINACAK_ONLEM, assessment.getAlinacakOnlem());
+        setCellValue(row, COL_NEW_SORUMLU, assessment.getSorumlu());
+        setCellValue(row, COL_NEW_TAMAMLANMA_TARIHI, assessment.getTamamlanmaTarihi());
+        
+        // Önlem sonrası değerleri doldur
+        double[] afterRiskValues = assessment.getAfterMeasuresRiskValues();
+        setCellValue(row, COL_NEW_SIKLIK_OS, afterRiskValues[0]);
+        setCellValue(row, COL_NEW_OLASILIK_OS, afterRiskValues[1]);
+        setCellValue(row, COL_NEW_SIDDET_OS, afterRiskValues[2]);
+        
+        // Önlem sonrası risk kategorilerini doldur
+        double afterRiskScore = assessment.getAfterMeasuresRiskScores().calculateNormalRiskScore();
+        setCellValue(row, COL_NEW_DUSUK_OS, parseRiskValue(assessment.getAfterMeasuresLowRisk()) > 0 ? afterRiskScore : 0);
+        setCellValue(row, COL_NEW_KABUL_EDILEBILIR_OS, parseRiskValue(assessment.getAfterMeasuresAcceptableRisk()) > 0 ? afterRiskScore : 0);
+        setCellValue(row, COL_NEW_ORTA_OS, parseRiskValue(assessment.getAfterMeasuresMediumRisk()) > 0 ? afterRiskScore : 0);
+        setCellValue(row, COL_NEW_BELIRGIN_OS, parseRiskValue(assessment.getAfterMeasuresSignificantRisk()) > 0 ? afterRiskScore : 0);
+        setCellValue(row, COL_NEW_TOLERE_EDILEMEZ_OS, parseRiskValue(assessment.getAfterMeasuresUnacceptableRisk()) > 0 ? afterRiskScore : 0);
+        
+        // Sonuç mesajını doldur
+        setCellValue(row, COL_NEW_SONUC_OS, assessment.getSonucOS());
+        
+        // Risk seviyesi bilgisini log'a yaz
+        log.info("Risk değerlendirmesi - No: {}, Risk Skoru: {}, Tolere Edilemez: {}", 
+            assessment.getNo(), 
+            riskScore,
+            assessment.getCurrentUnacceptableRisk());
+    }
+
+    private CellStyle createHeaderStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        style.setFont(font);
+        style.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        return style;
+    }
+
+    private String getCellValueAsString(Cell cell) {
+        if (cell == null) return "";
+        
+        switch (cell.getCellType()) {
+            case STRING:
+                return cell.getStringCellValue();
+            case NUMERIC:
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return cell.getLocalDateTimeCellValue().toLocalDate().toString();
+                }
+                return String.valueOf(cell.getNumericCellValue());
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            case FORMULA:
+                return cell.getCellFormula();
+            default:
+                return "";
+        }
+    }
+
+    private void setCellValue(Row row, int columnIndex, Object value) {
+        Cell cell = row.createCell(columnIndex);
+        if (value instanceof String) {
+            cell.setCellValue((String) value);
+        } else if (value instanceof Double) {
+            cell.setCellValue((Double) value);
+        } else if (value instanceof LocalDate) {
+            cell.setCellValue(((LocalDate) value).toString());
+        }
+    }
+
+    private double parseRiskValue(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return 0.0;
+        }
+        try {
+            return Double.parseDouble(value.trim());
+        } catch (NumberFormatException e) {
+            return 0.0;
+        }
+    }
+
+    private String getSheetCode(String sheetName) {
+        // Sekme adından kod oluştur
+        if (sheetName == null || sheetName.trim().isEmpty()) {
+            return "KOD";
+        }
+        
+        // Sekme adını temizle
+        String cleanName = sheetName.trim()
+            .replaceAll("'", "") // Tırnak işaretlerini kaldır
+            .replaceAll("!.*$", "") // ! işaretinden sonrasını kaldır
+            .toUpperCase(); // Büyük harfe çevir
+            
+        // İlk 3 karakteri al
+        if (cleanName.length() > 3) {
+            cleanName = cleanName.substring(0, 3);
+        }
+        
+        return cleanName;
+    }
+}

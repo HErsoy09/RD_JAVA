@@ -1,0 +1,25 @@
+# Risk analizi için özel lexicon
+tehlike	İsim
+tehlikeli	Sıfat
+risk	İsim
+riskli	Sıfat
+zarar	İsim
+zararlı	Sıfat
+kaza	İsim
+yaralanma	İsim
+ölüm	İsim
+yangın	İsim
+patlama	İsim
+düşme	İsim
+çarpma	İsim
+sıkışma	İsim
+elektrik	İsim
+kimyasal	Sıfat
+zehir	İsim
+zehirli	Sıfat
+radyasyon	İsim
+gürültü	İsim
+titreşim	İsim
+ergonomik	Sıfat
+biyolojik	Sıfat
+psikososyal	Sıfat
